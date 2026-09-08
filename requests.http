@@ -1,0 +1,89 @@
+### Runnable examples for every endpoint.
+### VS Code: install the "REST Client" extension, then click Send Request.
+### JetBrains IDEs: built in.
+###
+### Start the server first:  npm run seed && npm start
+
+@host = http://localhost:3000
+
+### Availability — after seeding this shows 6 capacity, 3 confirmed, 2 held.
+### One unit free. A fourth unit is held by an already-expired hold, which
+### does not count, because expiry is derived from the clock.
+GET {{host}}/availability?store=S412&format=aisle_barrier&cycle=C5
+
+### A store with plenty of space
+GET {{host}}/availability?store=S733&format=trolley_panel&cycle=C5
+
+### Unknown store — 404 rather than a guess
+GET {{host}}/availability?store=S999&format=aisle_barrier&cycle=C5
+
+### Trader A takes the last unit at S412
+POST {{host}}/holds
+Content-Type: application/json
+
+{
+  "campaignId": "kelloggs-spring",
+  "storeId": "S412",
+  "formatId": "aisle_barrier",
+  "cycleId": "C5",
+  "quantity": 1,
+  "traderId": "trader-a"
+}
+
+### Trader B wants the same unit — 409, with the current availability so the
+### trader's screen can update without a second call.
+POST {{host}}/holds
+Content-Type: application/json
+
+{
+  "campaignId": "nestle-cereal",
+  "storeId": "S412",
+  "formatId": "aisle_barrier",
+  "cycleId": "C5",
+  "quantity": 1,
+  "traderId": "trader-b"
+}
+
+### A larger hold somewhere with room
+POST {{host}}/holds
+Content-Type: application/json
+
+{
+  "campaignId": "pepsi-summer",
+  "storeId": "S733",
+  "formatId": "trolley_panel",
+  "cycleId": "C5",
+  "quantity": 4,
+  "traderId": "trader-c"
+}
+
+### Release a hold. Soft — the row is kept with who released it and why,
+### because someone will ask in three weeks why a campaign lost a store.
+### Change the id to one returned above.
+DELETE {{host}}/holds/6
+Content-Type: application/json
+
+{
+  "releasedBy": "manager-1",
+  "reason": "Nestle deal takes priority for this cycle"
+}
+
+### Confirm a campaign. Returns both a confirmed count and a rejected list —
+### partial success is a normal outcome, not an error.
+POST {{host}}/campaigns/kelloggs-spring/confirm
+Content-Type: application/json
+
+{
+  "confirmedBy": "trader-a"
+}
+
+### Confirm with deliberate overselling. The brief says commercial teams
+### sometimes want to accept the risk, so this is allowed, flagged on the
+### booking row, and reportable — rather than made impossible and worked
+### around in spreadsheets.
+POST {{host}}/campaigns/nestle-cereal/confirm?allowOversell=true
+Content-Type: application/json
+
+{
+  "confirmedBy": "manager-1"
+}

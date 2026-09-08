@@ -1,0 +1,28 @@
+{
+  "name": "smg-booking-api",
+  "version": "1.0.0",
+  "description": "Booking lifecycle and contention — SMG stage 2 technical task",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "prestart": "npm run seed",
+    "start": "tsx src/server.ts",
+    "seed": "tsx src/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.21.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^4.17.25",
+    "@types/node": "^26.5.0",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^2.1.5"
+  }
+}
