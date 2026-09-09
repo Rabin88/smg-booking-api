@@ -1,4 +1,4 @@
-import type { Database } from 'better-sqlite3';
+import type { Database } from "better-sqlite3";
 import type {
   AvailabilityResult,
   ConfirmCampaignParams,
@@ -9,15 +9,11 @@ import type {
   HoldRow,
   ReleaseHoldParams,
   ReleaseHoldResult,
-  SlotKey,
-} from './types.js';
+  SlotKey
+} from "./types.js";
 
 /**
  * Booking lifecycle and contention.
- *
- * This is the part of the system I chose to go deep on. Everything here
- * exists to answer one question correctly under concurrency: can this
- * trader have this space?
  */
 
 /**
@@ -31,8 +27,15 @@ import type {
  * whose expires_at has passed stops counting the instant the clock moves,
  * with no job having run and no row having changed.
  */
-function taken(db: Database, storeId: string, formatId: string, cycleId: string): number {
-  const row = db.prepare(`
+function taken(
+  db: Database,
+  storeId: string,
+  formatId: string,
+  cycleId: string
+): number {
+  const row = db
+    .prepare(
+      `
     SELECT
       COALESCE((SELECT SUM(quantity) FROM bookings
                 WHERE store_id = ? AND format_id = ? AND cycle_id = ?), 0)
@@ -41,7 +44,11 @@ function taken(db: Database, storeId: string, formatId: string, cycleId: string)
                   AND status = 'active'
                   AND expires_at > datetime('now')), 0)
       AS total
-  `).get(storeId, formatId, cycleId, storeId, formatId, cycleId) as { total: number };
+  `
+    )
+    .get(storeId, formatId, cycleId, storeId, formatId, cycleId) as {
+    total: number;
+  };
 
   return row.total;
 }
@@ -59,25 +66,41 @@ function taken(db: Database, storeId: string, formatId: string, cycleId: string)
  */
 export function getAvailability(
   db: Database,
-  { storeId, formatId, cycleId }: SlotKey,
+  { storeId, formatId, cycleId }: SlotKey
 ): AvailabilityResult | null {
-  const cap = db.prepare(`
+  const cap = db
+    .prepare(
+      `
     SELECT unit_count FROM store_format_capacity
     WHERE store_id = ? AND format_id = ?
-  `).get(storeId, formatId) as { unit_count: number } | undefined;
+  `
+    )
+    .get(storeId, formatId) as { unit_count: number } | undefined;
 
   if (!cap) return null;
 
-  const confirmed = (db.prepare(`
+  const confirmed = (
+    db
+      .prepare(
+        `
     SELECT COALESCE(SUM(quantity), 0) AS n FROM bookings
     WHERE store_id = ? AND format_id = ? AND cycle_id = ?
-  `).get(storeId, formatId, cycleId) as { n: number }).n;
+  `
+      )
+      .get(storeId, formatId, cycleId) as { n: number }
+  ).n;
 
-  const held = (db.prepare(`
+  const held = (
+    db
+      .prepare(
+        `
     SELECT COALESCE(SUM(quantity), 0) AS n FROM holds
     WHERE store_id = ? AND format_id = ? AND cycle_id = ?
       AND status = 'active' AND expires_at > datetime('now')
-  `).get(storeId, formatId, cycleId) as { n: number }).n;
+  `
+      )
+      .get(storeId, formatId, cycleId) as { n: number }
+  ).n;
 
   return {
     storeId,
@@ -86,7 +109,7 @@ export function getAvailability(
     capacity: cap.unit_count,
     confirmed,
     held,
-    available: cap.unit_count - confirmed - held,
+    available: cap.unit_count - confirmed - held
   };
 }
 
@@ -113,39 +136,66 @@ export function getAvailability(
  * SQLite serialises all writers, which is the same guarantee applied more
  * coarsely — fine at this scale, wrong at three thousand stores.
  */
-export function createHold(db: Database, {
-  campaignId, storeId, formatId, cycleId, quantity, traderId, holdDays = 7,
-}: CreateHoldParams): CreateHoldResult {
+export function createHold(
+  db: Database,
+  {
+    campaignId,
+    storeId,
+    formatId,
+    cycleId,
+    quantity,
+    traderId,
+    holdDays = 7
+  }: CreateHoldParams
+): CreateHoldResult {
   const tx = db.transaction((): CreateHoldResult => {
-    const cap = db.prepare(`
+    const cap = db
+      .prepare(
+        `
       SELECT unit_count FROM store_format_capacity
       WHERE store_id = ? AND format_id = ?
-    `).get(storeId, formatId) as { unit_count: number } | undefined;
+    `
+      )
+      .get(storeId, formatId) as { unit_count: number } | undefined;
 
     if (!cap) {
-      return { ok: false, reason: 'unknown_store_or_format' };
+      return { ok: false, reason: "unknown_store_or_format" };
     }
 
     const available = cap.unit_count - taken(db, storeId, formatId, cycleId);
 
     if (available < quantity) {
-      return { ok: false, reason: 'insufficient_availability', available };
+      return { ok: false, reason: "insufficient_availability", available };
     }
 
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO holds
         (campaign_id, store_id, format_id, cycle_id, quantity,
          status, expires_at, created_by)
       VALUES (?, ?, ?, ?, ?, 'active', datetime('now', ?), ?)
-    `).run(
-      campaignId, storeId, formatId, cycleId, quantity,
-      `+${holdDays} days`, traderId,
-    );
+    `
+      )
+      .run(
+        campaignId,
+        storeId,
+        formatId,
+        cycleId,
+        quantity,
+        `+${holdDays} days`,
+        traderId
+      );
 
-    const row = db.prepare('SELECT expires_at FROM holds WHERE id = ?')
+    const row = db
+      .prepare("SELECT expires_at FROM holds WHERE id = ?")
       .get(result.lastInsertRowid) as { expires_at: string };
 
-    return { ok: true, holdId: result.lastInsertRowid, expiresAt: row.expires_at };
+    return {
+      ok: true,
+      holdId: result.lastInsertRowid,
+      expiresAt: row.expires_at
+    };
   });
 
   return tx.immediate();
@@ -163,16 +213,23 @@ export function createHold(db: Database, {
  *
  * Only active holds can be released. Confirmed bookings stand, per the brief.
  */
-export function releaseHold(db: Database, { holdId, releasedBy, reason }: ReleaseHoldParams): ReleaseHoldResult {
-  const result = db.prepare(`
+export function releaseHold(
+  db: Database,
+  { holdId, releasedBy, reason }: ReleaseHoldParams
+): ReleaseHoldResult {
+  const result = db
+    .prepare(
+      `
     UPDATE holds
     SET status = 'released', released_by = ?, released_reason = ?
     WHERE id = ? AND status = 'active'
-  `).run(releasedBy, reason ?? null, holdId);
+  `
+    )
+    .run(releasedBy, reason ?? null, holdId);
 
   return result.changes === 1
     ? { ok: true }
-    : { ok: false, reason: 'not_an_active_hold' };
+    : { ok: false, reason: "not_an_active_hold" };
 }
 
 /**
@@ -196,65 +253,89 @@ export function releaseHold(db: Database, { holdId, releasedBy, reason }: Releas
  */
 export function confirmCampaign(
   db: Database,
-  { campaignId, confirmedBy, allowOversell = false }: ConfirmCampaignParams,
+  { campaignId, confirmedBy, allowOversell = false }: ConfirmCampaignParams
 ): ConfirmCampaignResult {
-  const holds = db.prepare(`
+  const holds = db
+    .prepare(
+      `
     SELECT * FROM holds WHERE campaign_id = ? AND status = 'active'
-  `).all(campaignId) as HoldRow[];
+  `
+    )
+    .all(campaignId) as HoldRow[];
 
   const confirmed: Array<Extract<ConfirmOutcome, { ok: true }>> = [];
   const rejected: Array<Extract<ConfirmOutcome, { ok: false }>> = [];
 
   for (const hold of holds) {
-    const outcome = db.transaction((): ConfirmOutcome => {
-      // Still live? status = 'active' alone is not enough — the row stays
-      // 'active' after expiry, so the clock has to be checked too.
-      const live = db.prepare(`
+    const outcome = db
+      .transaction((): ConfirmOutcome => {
+        // Still live? status = 'active' alone is not enough — the row stays
+        // 'active' after expiry, so the clock has to be checked too.
+        const live = db
+          .prepare(
+            `
         SELECT 1 FROM holds
         WHERE id = ? AND status = 'active' AND expires_at > datetime('now')
-      `).get(hold.id);
+      `
+          )
+          .get(hold.id);
 
-      if (!live) {
-        return { ok: false, storeId: hold.store_id, reason: 'hold_expired' };
-      }
+        if (!live) {
+          return { ok: false, storeId: hold.store_id, reason: "hold_expired" };
+        }
 
-      const cap = db.prepare(`
+        const cap = db
+          .prepare(
+            `
         SELECT unit_count FROM store_format_capacity
         WHERE store_id = ? AND format_id = ?
-      `).get(hold.store_id, hold.format_id) as { unit_count: number };
+      `
+          )
+          .get(hold.store_id, hold.format_id) as { unit_count: number };
 
-      // This hold is itself counted in taken(), so subtract it before asking
-      // whether the space is really there.
-      const otherClaims =
-        taken(db, hold.store_id, hold.format_id, hold.cycle_id) - hold.quantity;
+        // This hold is itself counted in taken(), so subtract it before asking
+        // whether the space is really there.
+        const otherClaims =
+          taken(db, hold.store_id, hold.format_id, hold.cycle_id) -
+          hold.quantity;
 
-      const room = cap.unit_count - otherClaims;
-      const oversold = room < hold.quantity;
+        const room = cap.unit_count - otherClaims;
+        const oversold = room < hold.quantity;
 
-      if (oversold && !allowOversell) {
-        return {
-          ok: false,
-          storeId: hold.store_id,
-          reason: 'insufficient_availability',
-          available: Math.max(room, 0),
-        };
-      }
+        if (oversold && !allowOversell) {
+          return {
+            ok: false,
+            storeId: hold.store_id,
+            reason: "insufficient_availability",
+            available: Math.max(room, 0)
+          };
+        }
 
-      db.prepare(`
+        db.prepare(
+          `
         INSERT INTO bookings
           (campaign_id, store_id, format_id, cycle_id, quantity,
            confirmed_by, oversold, source_hold_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        hold.campaign_id, hold.store_id, hold.format_id, hold.cycle_id,
-        hold.quantity, confirmedBy, oversold ? 1 : 0, hold.id,
-      );
+      `
+        ).run(
+          hold.campaign_id,
+          hold.store_id,
+          hold.format_id,
+          hold.cycle_id,
+          hold.quantity,
+          confirmedBy,
+          oversold ? 1 : 0,
+          hold.id
+        );
 
-      db.prepare(`UPDATE holds SET status = 'confirmed' WHERE id = ?`)
-        .run(hold.id);
+        db.prepare(`UPDATE holds SET status = 'confirmed' WHERE id = ?`).run(
+          hold.id
+        );
 
-      return { ok: true, storeId: hold.store_id, oversold };
-    }).immediate();
+        return { ok: true, storeId: hold.store_id, oversold };
+      })
+      .immediate();
 
     if (outcome.ok) confirmed.push(outcome);
     else rejected.push(outcome);
@@ -263,6 +344,6 @@ export function confirmCampaign(
   return {
     confirmed: confirmed.length,
     oversold: confirmed.filter((c) => c.oversold).length,
-    rejected,
+    rejected
   };
 }

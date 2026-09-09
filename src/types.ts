@@ -20,8 +20,8 @@ export interface CreateHoldParams extends SlotKey {
 
 export type CreateHoldResult =
   | { ok: true; holdId: number | bigint; expiresAt: string }
-  | { ok: false; reason: 'unknown_store_or_format' }
-  | { ok: false; reason: 'insufficient_availability'; available: number };
+  | { ok: false; reason: "unknown_store_or_format" }
+  | { ok: false; reason: "insufficient_availability"; available: number };
 
 export interface ReleaseHoldParams {
   holdId: number;
@@ -30,8 +30,7 @@ export interface ReleaseHoldParams {
 }
 
 export type ReleaseHoldResult =
-  | { ok: true }
-  | { ok: false; reason: 'not_an_active_hold' };
+  { ok: true } | { ok: false; reason: "not_an_active_hold" };
 
 export interface ConfirmCampaignParams {
   campaignId: string;
@@ -41,8 +40,13 @@ export interface ConfirmCampaignParams {
 
 export type ConfirmOutcome =
   | { ok: true; storeId: string; oversold: boolean }
-  | { ok: false; storeId: string; reason: 'hold_expired' }
-  | { ok: false; storeId: string; reason: 'insufficient_availability'; available: number };
+  | { ok: false; storeId: string; reason: "hold_expired" }
+  | {
+      ok: false;
+      storeId: string;
+      reason: "insufficient_availability";
+      available: number;
+    };
 
 export interface ConfirmCampaignResult {
   confirmed: number;
@@ -50,7 +54,7 @@ export interface ConfirmCampaignResult {
   rejected: Array<Extract<ConfirmOutcome, { ok: false }>>;
 }
 
-export type HoldStatus = 'active' | 'confirmed' | 'released';
+export type HoldStatus = "active" | "confirmed" | "released";
 
 export interface HoldRow {
   id: number;

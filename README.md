@@ -22,14 +22,14 @@ is a file created on first run.
 
 ## What is here
 
-| File | Purpose |
-| --- | --- |
-| `src/schema.sql` | The data model |
-| `src/holds.js` | The booking lifecycle. This is the part worth reading. |
-| `src/server.js` | REST routes |
-| `src/seed.js` | Sample data |
-| `test/holds.test.js` | Lifecycle and contention tests |
-| `test/api.test.js` | HTTP-level tests |
+| File                 | Purpose                                                |
+| -------------------- | ------------------------------------------------------ |
+| `src/schema.sql`     | The data model                                         |
+| `src/holds.js`       | The booking lifecycle. This is the part worth reading. |
+| `src/server.js`      | REST routes                                            |
+| `src/seed.js`        | Sample data                                            |
+| `test/holds.test.js` | Lifecycle and contention tests                         |
+| `test/api.test.js`   | HTTP-level tests                                       |
 
 ## What is not here
 
@@ -63,10 +63,10 @@ There is no `available` column. Every read computes:
 capacity − confirmed bookings − live holds
 ```
 
-A stored counter would be faster but could drift out of sync with reality,
-and a drifted counter is silently wrong. Deriving it means it cannot be
-stale. If reads became slow I would cache on top of the derivation, never
-replace it — a cache can be rebuilt, a drifted value cannot be detected.
+Storing a counter would be faster to read, but it could quietly fall out of
+sync with reality — and there would be no way to tell it was wrong.
+Calculating it fresh each time avoids that problem entirely, since there is
+nothing to fall out of sync.
 
 ### 2. Expiry is evaluated at read time
 
@@ -133,18 +133,15 @@ this in production.
 
 ## What I would build next
 
-**Partial confirmation at scale.** `confirmCampaign` already returns both a
-confirmed count and a rejected list, but it loops over holds one at a time.
-At 400 stores that is 400 transactions. I would batch them while keeping
-partial success, since one unavailable store must not fail a whole campaign.
+**Design the reconciliation properly.** Nothing compares what the database
+says is booked against what the field team actually installed. A failed
+installation or a refurbished store would go unnoticed and finance would
+still invoice for it. I'd run that comparison once per cycle and send
+mismatches to a person rather than fixing them automatically. Flagged in
+the design, not solved.
 
-**Release-and-reassign as one operation.** Today a manager releases a hold
-and the space is briefly free for anyone. If the point of the override is to
-give the unit to a specific trader, another trader's availability poll can
-take it in between. Those two steps need to happen inside one transaction.
-
-**Reconciliation.** Nothing here compares confirmed bookings against what the
-field team actually installed. Tests prove the code is correct and
-monitoring proves the system is healthy, but neither catches the case the
-brief warns about: the database and the physical shelf disagreeing, and
-someone being invoiced for media that never ran.
+**Notifying downstream systems.** Confirmation currently just writes to
+`bookings`; nothing tells the field team or finance. I'd use a message
+queue rather than direct API calls — if their systems are down, messages
+wait rather than either blocking a confirmation or being silently lost,
+and both consumers subscribe to the same event.
