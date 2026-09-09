@@ -1,10 +1,10 @@
-# SMG booking API — code sample
+# SMG booking API
 
 A focused implementation of the booking lifecycle and contention handling
 for the stage 2 technical task. This accompanies the design document; it is
 not a complete system.
 
-## Running it
+## Getting started
 
 ```bash
 npm install
@@ -20,7 +20,7 @@ the server.
 Requires Node 18 or later. SQLite needs no separate install — the database
 is a file created on first run.
 
-## What is here
+## Project structure
 
 | File                 | Purpose                                                |
 | -------------------- | ------------------------------------------------------ |
@@ -31,9 +31,9 @@ is a file created on first run.
 | `test/holds.test.js` | Lifecycle and contention tests                         |
 | `test/api.test.js`   | HTTP-level tests                                       |
 
-## What is not here
+## Out of scope
 
-Deliberately out of scope, all discussed in the design document:
+Deliberately excluded from this implementation, all discussed in the design document:
 
 - Trader-facing search across the estate
 - Authentication and role checks (`allowOversell` is a flag, not a permission)
@@ -53,7 +53,7 @@ POST   /campaigns/:id/confirm[?allowOversell=true]
 `requests.http` has runnable examples for each. Open it in VS Code with the
 REST Client extension, or in any JetBrains IDE.
 
-## The three decisions worth reading the code for
+## Key design decisions
 
 ### 1. Availability is derived, never stored
 
